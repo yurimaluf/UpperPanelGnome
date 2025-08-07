@@ -28,7 +28,7 @@ import { Extension, gettext as _ } from 'resource:///org/gnome/shell/extensions/
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-const MESSAGE_PATH = GLib.build_filenamev([GLib.get_user_config_dir(), "panelnote48", "message.txt"]);
+const MESSAGE_PATH = GLib.build_filenamev([GLib.get_user_config_dir(), "panelmsgTux", "message.txt"]);
 
 const Indicator = GObject.registerClass(
     class Indicator extends PanelMenu.Button {
