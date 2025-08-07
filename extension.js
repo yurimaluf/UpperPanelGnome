@@ -16,72 +16,88 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-// Inspired by the macOS app 'One Thing'
+// Inspired by the PainelNote48 app 'One Thing'
 // Extension uses elements from 'Just Another Search Bar' (https://extensions.gnome.org/extension/5522/just-another-search-bar/)
-
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
+import GLib from 'gi://GLib';
+import Mainloop from 'gi://Mainloop';
 
 import { Extension, gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
-import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
-
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+
+const MESSAGE_PATH = GLib.build_filenamev([GLib.get_user_config_dir(), "panelnote48", "message.txt"]);
 
 const Indicator = GObject.registerClass(
     class Indicator extends PanelMenu.Button {
-        _init(settings) {
-            super._init(0.0, _('Panel Note'));
+        _init() {
+            super._init(0.0, _('Panel Note Dynamic'));
 
-            /* ------------------------------- Panel Note ------------------------------- */
-            let noteInPanel = new St.Label({
-                text: settings.get_string('note'),
+            this._label = new St.Label({
+                text: "Carregando mensagem...",
                 y_expand: true,
                 y_align: Clutter.ActorAlign.CENTER,
             });
-            this.add_child(noteInPanel);
+            this.add_child(this._label);
 
-
-            /* ----------------------------- Note Entry Box ----------------------------- */
-            this.entry = new St.Entry({
-                text: settings.get_string('note'),
-                can_focus: true,
-                track_hover: true
-            });
-
-            this.entry.set_primary_icon(new St.Icon({
-                icon_name: 'document-edit-symbolic',
-                style_class: 'popup-menu-icon',
-            }));
-
-            this.entry.clutter_text.connect('text-changed', () => {
-                let text = this.entry.get_text();
-                if (text == "")
-                    text = "No Note";
-                settings.set_string('note', text);
-                noteInPanel.text = text;
-            });
-
-            let popupEdit = new PopupMenu.PopupMenuSection();
-            popupEdit.actor.add_child(this.entry);
-
-            this.menu.addMenuItem(popupEdit);
-            this.menu.actor.add_style_class_name('note-entry');
+            this._timeoutId = null;
+            this._startUpdating();
         }
-    });
+
+        _startUpdating() {
+            // Função para ler o arquivo e atualizar o texto
+            const updateMessage = () => {
+                try {
+                    let [ok, contents] = GLib.file_get_contents(MESSAGE_PATH);
+                    if (ok && contents) {
+                        let message = contents.toString().trim();
+                        if (message === "") {
+                            message = "Nenhuma mensagem.";
+                        }
+                        this._label.set_text(message);
+                    } else {
+                        this._label.set_text("Arquivo de mensagem não encontrado.");
+                    }
+                } catch (e) {
+                    log("Erro ao ler arquivo de mensagem: " + e);
+                    this._label.set_text("Erro na leitura da mensagem.");
+                }
+                // Repete a cada 5 segundos
+                return true;
+            };
+
+            // Executa imediatamente e agenda repetição periódica
+            updateMessage();
+            this._timeoutId = Mainloop.timeout_add_seconds(5, updateMessage);
+        }
+
+        _stopUpdating() {
+            if (this._timeoutId) {
+                Mainloop.source_remove(this._timeoutId);
+                this._timeoutId = null;
+            }
+        }
+
+        destroy() {
+            this._stopUpdating();
+            super.destroy();
+        }
+    }
+);
 
 export default class IndicatorExampleExtension extends Extension {
     enable() {
-        this._settings = this.getSettings();
-        this._indicator = new Indicator(this._settings);
+        this._indicator = new Indicator();
         Main.panel.addToStatusArea(this.uuid, this._indicator);
     }
 
     disable() {
-        this._indicator.entry.disconnect();
-        this._indicator.destroy();
-        this._indicator = null;
-        this._settings = null;
+        if (this._indicator) {
+            this._indicator.destroy();
+            this._indicator = null;
+        }
     }
 }
+
